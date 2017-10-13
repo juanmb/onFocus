@@ -19,10 +19,8 @@
 #define STEP_PIN 7
 #define LED_PIN 13
 
-#define USE_SLEEP true // true: use sleep pin, false: use enable pin
-
-// maximum speed is 160 pps which should be OK for most tin can steppers
-#define MAXSPEED 800
+#define USE_SLEEP true  // true: use sleep pin, false: use enable pin
+#define MAXSPEED 800    // maximum speed in pulses per second
 #define ACCEL 4000
 
 // period to wait before turning power off (in milliseconds)
@@ -215,7 +213,6 @@ void setup()
 
     Serial.begin(9600);
 }
-
 
 
 void loop()
