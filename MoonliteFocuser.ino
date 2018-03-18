@@ -13,18 +13,27 @@
 #include <AccelStepper.h>
 #include "serial_command.h"
 
+#define MS1_PIN 2
+#define MS2_PIN 3
 #define ENABLE_PIN 4
 #define RESET_PIN 5
 #define DIR_PIN 6
 #define STEP_PIN 7
+#define SWITCH_PIN 10
 #define LED_PIN 13
 
 #define USE_SLEEP true  // true: use sleep pin, false: use enable pin
-#define MAXSPEED 800    // maximum speed in pulses per second
-#define ACCEL 4000
+#define SPEED 50        // initial speed (pulses/second)
+#define ACCEL 2000      // acceleration (pulse/second2)
+
+// stepping modes
+#define FULL_STEP 0
+#define HALF_STEP 1
+#define MS_4STEPS 2
+#define MS_8STEPS 3
 
 // period to wait before turning power off (in milliseconds)
-#define ACTIVE_TIME 10000
+#define ACTIVE_TIME 4000
 
 SerialCommand sCmd;
 AccelStepper stepper(1, STEP_PIN, DIR_PIN);
@@ -32,6 +41,7 @@ AccelStepper stepper(1, STEP_PIN, DIR_PIN);
 bool isRunning = false;
 bool isPowerOn = false;
 long startTime = 0;
+int steppingDelay = 1; // 500 steps/second
 
 
 long hexstr2long(char *line)
@@ -55,6 +65,19 @@ void turnOff()
     digitalWrite(LED_PIN, LOW);
     isRunning = false;
     isPowerOn = false;
+}
+
+void setStepMode(uint8_t mode)
+{
+    digitalWrite(MS1_PIN, mode & 0x01);
+    digitalWrite(MS2_PIN, mode & 0x02);
+}
+
+uint8_t getStepMode()
+{
+    uint8_t mode = 2*digitalRead(MS2_PIN);
+    mode += digitalRead(MS1_PIN);
+    return mode;
 }
 
 //Immediately stop any focus motor movement. returns nothing
@@ -84,18 +107,20 @@ void cmdGetTempCoef(char *param, uint8_t len)
 
 // Returns the current stepping delay where XX is a two-digit unsigned hex
 // number. See the :SD# command for a list of possible return values.
-// Hardcoded for now. Might turn this into AccelStepper acceleration at
-// some point
 void cmdGetSteppingDelay(char *param, uint8_t len)
 {
-    Serial.print("02#");
+    char tmp[4];
+    sprintf(tmp, "%02X#", steppingDelay);
+    Serial.print(tmp);
 }
 
 // Returns "FF#" if the focus motor is half-stepped otherwise return "00#".
-// Hardcoded
 void cmdGetHalfStep(char *param, uint8_t len)
 {
-    Serial.print("00#");
+    if (getStepMode() == HALF_STEP)
+        Serial.print("FF#");
+    else
+        Serial.print("00#");
 }
 
 // Returns "00#" if the focus motor is not moving, otherwise return "01#",
@@ -153,19 +178,20 @@ void cmdSetTempCoef(char *param, uint8_t len)
 //Set the new stepping delay where XX is a two-digit,unsigned hex number.
 void cmdSetSteppingDelay(char *param, uint8_t len)
 {
-    //TODO
+    steppingDelay = (int)hexstr2long(param);
+    stepper.setMaxSpeed(500.0/(float)steppingDelay);
 }
 
 //Set full-step mode.
 void cmdSetFullStep(char *param, uint8_t len)
 {
-    //TODO
+    setStepMode(FULL_STEP);
 }
 
 //Set half-step mode.
 void cmdSetHalfStep(char *param, uint8_t len)
 {
-    //TODO
+    setStepMode(HALF_STEP);
 }
 
 //Set the new position where YYYY is a four-digit
@@ -205,8 +231,14 @@ void setup()
 
     pinMode(ENABLE_PIN, OUTPUT);
     pinMode(RESET_PIN, OUTPUT);
-    stepper.setSpeed(MAXSPEED);
-    stepper.setMaxSpeed(MAXSPEED);
+    pinMode(MS1_PIN, OUTPUT);
+    pinMode(MS2_PIN, OUTPUT);
+    pinMode(SWITCH_PIN, INPUT_PULLUP);
+
+    setStepMode(FULL_STEP);
+
+    stepper.setSpeed(SPEED);
+    stepper.setMaxSpeed(500.0/(float)steppingDelay);
     stepper.setAcceleration(ACCEL);
     digitalWrite(RESET_PIN, HIGH);
     turnOff();
@@ -222,6 +254,11 @@ void loop()
     // update motor status
     if (isRunning) {
         stepper.run();
+        if (digitalRead(SWITCH_PIN) == 0) {
+            isRunning = false;
+            stepper.stop(); // Stop as fast as possible: sets new target
+            stepper.runToPosition();
+        }
         if (stepper.distanceToGo() == 0) {
             //start timer to decide when to power off the board
             startTime = millis();

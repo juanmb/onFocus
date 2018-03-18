@@ -7,7 +7,8 @@
 # Source code can be downloaded from:
 # 	https://github.com/sudar/Arduino-Makefile
 
-BOARD_TAG    = nano328
+BOARD_TAG    = nano
+BOARD_SUB    = atmega328
 ARDUINO_LIBS = AccelStepper
 ARDUINO_LIBS += Wire
 ARDUINO_PORT = /dev/ttyUSB0
