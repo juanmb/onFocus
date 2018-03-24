@@ -22,8 +22,10 @@
 #define SWITCH_PIN 10
 #define LED_PIN 13
 
+
 #define USE_SLEEP true  // true: use sleep pin, false: use enable pin
-#define SPEED 50        // initial speed (pulses/second)
+#define HOMING1_SPEED 400
+#define HOMING2_SPEED 50
 #define ACCEL 2000      // acceleration (pulse/second2)
 
 // stepping modes
@@ -33,15 +35,19 @@
 #define MS_8STEPS 3
 
 // period to wait before turning power off (in milliseconds)
-#define ACTIVE_TIME 4000
+#define ACTIVE_TIME 1000
+
+enum {CMD_NONE, CMD_GOTO, CMD_STOP, CMD_HOME};
+enum {ST_IDLE, ST_RUNNING, ST_HOMING1, ST_HOMING2};
 
 SerialCommand sCmd;
 AccelStepper stepper(1, STEP_PIN, DIR_PIN);
 
-bool isRunning = false;
-bool isPowerOn = false;
 long startTime = 0;
-int steppingDelay = 1; // 500 steps/second
+int command = CMD_NONE;
+int state = ST_IDLE;
+bool isPowerOn = false;
+int speed = 1; // 100 steps/second
 
 
 long hexstr2long(char *line)
@@ -51,19 +57,15 @@ long hexstr2long(char *line)
 
 void turnOn()
 {
-    if (!isRunning) {
-        digitalWrite(ENABLE_PIN, !USE_SLEEP);
-        digitalWrite(LED_PIN, HIGH);
-        isRunning = true;
-        isPowerOn = true;
-    }
+    digitalWrite(LED_PIN, HIGH);
+    digitalWrite(ENABLE_PIN, !USE_SLEEP);
+    isPowerOn = true;
 }
 
 void turnOff()
 {
-    digitalWrite(ENABLE_PIN, USE_SLEEP);
     digitalWrite(LED_PIN, LOW);
-    isRunning = false;
+    digitalWrite(ENABLE_PIN, USE_SLEEP);
     isPowerOn = false;
 }
 
@@ -84,9 +86,7 @@ uint8_t getStepMode()
 //code from Quickstop example. This is blocking
 void cmdCancelFocus(char *param, uint8_t len)
 {
-    turnOn();
-    stepper.stop(); // Stop as fast as possible: sets new target
-    stepper.runToPosition();
+    command = CMD_STOP;
 }
 
 
@@ -95,7 +95,7 @@ void cmdCancelFocus(char *param, uint8_t len)
 // is this the only command that should actually make the stepper run ?
 void cmdGotoPos(char *param, uint8_t len)
 {
-    turnOn();
+    command = CMD_GOTO;
 }
 
 // Returns the temperature coefficient where XX is a two-digit signed (2’s
@@ -110,7 +110,7 @@ void cmdGetTempCoef(char *param, uint8_t len)
 void cmdGetSteppingDelay(char *param, uint8_t len)
 {
     char tmp[4];
-    sprintf(tmp, "%02X#", steppingDelay);
+    sprintf(tmp, "%02X#", speed);
     Serial.print(tmp);
 }
 
@@ -127,11 +127,10 @@ void cmdGetHalfStep(char *param, uint8_t len)
 // AccelStepper returns Positive as clockwise
 void cmdGetFocusMoving(char *param, uint8_t len)
 {
-    if (stepper.distanceToGo() == 0) {
+    if (stepper.distanceToGo() == 0)
         Serial.print("00#");
-    } else {
+    else
         Serial.print("01#");
-    }
 }
 
 // Returns the new position previously set by a ":SNYYYY" command where
@@ -178,8 +177,7 @@ void cmdSetTempCoef(char *param, uint8_t len)
 //Set the new stepping delay where XX is a two-digit,unsigned hex number.
 void cmdSetSteppingDelay(char *param, uint8_t len)
 {
-    steppingDelay = (int)hexstr2long(param);
-    stepper.setMaxSpeed(500.0/(float)steppingDelay);
+    speed = (int)hexstr2long(param);
 }
 
 //Set full-step mode.
@@ -197,9 +195,14 @@ void cmdSetHalfStep(char *param, uint8_t len)
 //Set the new position where YYYY is a four-digit
 void cmdSetNewPos(char *param, uint8_t len)
 {
-    turnOn();
     long pos = hexstr2long(param);
-    stepper.moveTo(pos);
+
+    if (pos == 0) {
+        command = CMD_HOME;
+    } else {
+        stepper.moveTo(pos);
+        command = CMD_GOTO;
+    }
 }
 
 //Set the current position where YYYY is a four-digit unsigned hex number.
@@ -237,8 +240,6 @@ void setup()
 
     setStepMode(FULL_STEP);
 
-    stepper.setSpeed(SPEED);
-    stepper.setMaxSpeed(500.0/(float)steppingDelay);
     stepper.setAcceleration(ACCEL);
     digitalWrite(RESET_PIN, HIGH);
     turnOff();
@@ -249,25 +250,64 @@ void setup()
 
 void loop()
 {
+    command = CMD_NONE;
     sCmd.readSerial();  // process serial commands
 
     // update motor status
-    if (isRunning) {
-        stepper.run();
-        if (digitalRead(SWITCH_PIN) == 0) {
-            isRunning = false;
-            stepper.stop(); // Stop as fast as possible: sets new target
-            stepper.runToPosition();
-        }
-        if (stepper.distanceToGo() == 0) {
-            //start timer to decide when to power off the board
-            startTime = millis();
-            isRunning = false;
-        }
-    } else if(isPowerOn) {
-        // turn power off if active time period has passed
-        if(millis() - startTime > ACTIVE_TIME) {
-            turnOff();
-        }
-    }
+    switch(state) {
+        case ST_IDLE:
+            if (command == CMD_GOTO) {
+                turnOn();
+                stepper.setMaxSpeed(20.0*(float)speed);
+                state = ST_RUNNING;
+            } else if (command == CMD_HOME) {
+                turnOn();
+                stepper.setMaxSpeed(HOMING1_SPEED);
+                stepper.setCurrentPosition(20000);
+                stepper.moveTo(0);
+                state = ST_HOMING1;
+            } else {
+                // turn power off if active time period has elapsed
+                if (isPowerOn && (millis() - startTime > ACTIVE_TIME))
+                    turnOff();
+            }
+            break;
+
+        case ST_RUNNING:
+            if (command == CMD_STOP) {
+                stepper.stop();
+                state = ST_IDLE;
+            }
+
+            if (stepper.distanceToGo() == 0) {
+                //start timer to decide when to power off the board
+                startTime = millis();
+                state = ST_IDLE;
+            }
+            break;
+
+        case ST_HOMING1:
+            if (command == CMD_STOP) {
+                stepper.stop();
+                stepper.setCurrentPosition(0);
+                state = ST_IDLE;
+            } else if (digitalRead(SWITCH_PIN) == 1) {
+                delay(20);
+                stepper.setCurrentPosition(0);
+                stepper.moveTo(1000);
+                stepper.setMaxSpeed(HOMING2_SPEED);
+                state = ST_HOMING2;
+            }
+            break;
+
+        case ST_HOMING2:
+            if (digitalRead(SWITCH_PIN) == 0) {
+                stepper.stop();
+                stepper.setCurrentPosition(0);
+                state = ST_IDLE;
+            }
+            break;
+    };
+
+    stepper.run();
 }
