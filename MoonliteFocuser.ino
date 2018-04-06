@@ -24,9 +24,9 @@
 
 
 #define USE_SLEEP true  // true: use sleep pin, false: use enable pin
-#define HOMING1_SPEED 400
+#define HOMING1_SPEED 320
 #define HOMING2_SPEED 50
-#define ACCEL 2000      // acceleration (pulse/second2)
+#define ACCEL 1000      // acceleration (pulse/second2)
 
 // stepping modes
 #define FULL_STEP 0
@@ -291,7 +291,7 @@ void loop()
                 stepper.stop();
                 stepper.setCurrentPosition(0);
                 state = ST_IDLE;
-            } else if (digitalRead(SWITCH_PIN) == 1) {
+            } else if (digitalRead(SWITCH_PIN) == 0) {
                 delay(20);
                 stepper.setCurrentPosition(0);
                 stepper.moveTo(1000);
@@ -301,7 +301,7 @@ void loop()
             break;
 
         case ST_HOMING2:
-            if (digitalRead(SWITCH_PIN) == 0) {
+            if (digitalRead(SWITCH_PIN) == 1) {
                 stepper.stop();
                 stepper.setCurrentPosition(0);
                 state = ST_IDLE;
