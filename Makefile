@@ -11,7 +11,7 @@ BOARD_TAG    = nano
 BOARD_SUB    = atmega328
 ARDUINO_LIBS = AccelStepper
 ARDUINO_LIBS += Wire
-ARDUINO_PORT = /dev/ttyUSB0
+ARDUINO_PORT = /dev/ttyUSB.focuser
 
 include /usr/share/arduino/Arduino.mk
 

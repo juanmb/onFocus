@@ -26,7 +26,7 @@
 #define USE_SLEEP true  // true: use sleep pin, false: use enable pin
 #define HOMING1_SPEED 320
 #define HOMING2_SPEED 50
-#define ACCEL 1000      // acceleration (pulse/second2)
+#define ACCEL 2000      // acceleration (pulse/second2)
 
 // stepping modes
 #define FULL_STEP 0
@@ -47,7 +47,7 @@ long startTime = 0;
 int command = CMD_NONE;
 int state = ST_IDLE;
 bool isPowerOn = false;
-int speed = 1; // 100 steps/second
+int speed = 32; // motor speed (from 1 to 32)
 
 
 long hexstr2long(char *line)
