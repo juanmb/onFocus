@@ -16,17 +16,19 @@
 #define MS1_PIN 2
 #define MS2_PIN 3
 #define ENABLE_PIN 4
-#define RESET_PIN 5
-#define DIR_PIN 6
-#define STEP_PIN 7
-#define SWITCH_PIN 10
+#define RESET_PIN 7
+#define DIR_PIN 5
+#define STEP_PIN 6
+#define SWITCH_PIN 9
 #define LED_PIN 13
 
 
 #define USE_SLEEP true  // true: use sleep pin, false: use enable pin
-#define HOMING1_SPEED 320
-#define HOMING2_SPEED 50
-#define ACCEL 2000      // acceleration (pulse/second2)
+#define HOMING1_SPEED 800
+#define HOMING2_SPEED 400
+#define HOMING3_SPEED 200
+#define HOMING_DIST 400
+#define ACCEL 4000      // acceleration (pulse/second2)
 
 // stepping modes
 #define FULL_STEP 0
@@ -38,7 +40,7 @@
 #define ACTIVE_TIME 1000
 
 enum {CMD_NONE, CMD_GOTO, CMD_STOP, CMD_HOME};
-enum {ST_IDLE, ST_RUNNING, ST_HOMING1, ST_HOMING2};
+enum {ST_IDLE, ST_RUNNING, ST_HOMING1, ST_HOMING2, ST_HOMING3};
 
 SerialCommand sCmd;
 AccelStepper stepper(1, STEP_PIN, DIR_PIN);
@@ -117,7 +119,7 @@ void cmdGetSteppingDelay(char *param, uint8_t len)
 // Returns "FF#" if the focus motor is half-stepped otherwise return "00#".
 void cmdGetHalfStep(char *param, uint8_t len)
 {
-    if (getStepMode() == HALF_STEP)
+    if (getStepMode() == MS_8STEPS)
         Serial.print("FF#");
     else
         Serial.print("00#");
@@ -183,13 +185,15 @@ void cmdSetSteppingDelay(char *param, uint8_t len)
 //Set full-step mode.
 void cmdSetFullStep(char *param, uint8_t len)
 {
-    setStepMode(FULL_STEP);
+    //setStepMode(FULL_STEP);
+    setStepMode(MS_4STEPS);
 }
 
 //Set half-step mode.
 void cmdSetHalfStep(char *param, uint8_t len)
 {
-    setStepMode(HALF_STEP);
+    //setStepMode(HALF_STEP);
+    setStepMode(MS_8STEPS);
 }
 
 //Set the new position where YYYY is a four-digit
@@ -238,7 +242,7 @@ void setup()
     pinMode(MS2_PIN, OUTPUT);
     pinMode(SWITCH_PIN, INPUT_PULLUP);
 
-    setStepMode(FULL_STEP);
+    setStepMode(MS_4STEPS);
 
     stepper.setAcceleration(ACCEL);
     digitalWrite(RESET_PIN, HIGH);
@@ -258,7 +262,7 @@ void loop()
         case ST_IDLE:
             if (command == CMD_GOTO) {
                 turnOn();
-                stepper.setMaxSpeed(20.0*(float)speed);
+                stepper.setMaxSpeed(80.0*(float)speed);
                 state = ST_RUNNING;
             } else if (command == CMD_HOME) {
                 turnOn();
@@ -294,14 +298,31 @@ void loop()
             } else if (digitalRead(SWITCH_PIN) == 0) {
                 delay(20);
                 stepper.setCurrentPosition(0);
-                stepper.moveTo(1000);
+                stepper.moveTo(HOMING_DIST);
                 stepper.setMaxSpeed(HOMING2_SPEED);
                 state = ST_HOMING2;
             }
             break;
 
         case ST_HOMING2:
-            if (digitalRead(SWITCH_PIN) == 1) {
+            if (command == CMD_STOP) {
+                stepper.stop();
+                stepper.setCurrentPosition(0);
+                state = ST_IDLE;
+	    } else if (stepper.currentPosition() == HOMING_DIST) {
+                stepper.stop();
+                stepper.moveTo(-1000);
+                stepper.setMaxSpeed(HOMING3_SPEED);
+                state = ST_HOMING3;
+            }
+            break;
+
+        case ST_HOMING3:
+            if (command == CMD_STOP) {
+                stepper.stop();
+                stepper.setCurrentPosition(0);
+                state = ST_IDLE;
+	    } else if (digitalRead(SWITCH_PIN) == 0) {
                 stepper.stop();
                 stepper.setCurrentPosition(0);
                 state = ST_IDLE;

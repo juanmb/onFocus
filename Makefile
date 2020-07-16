@@ -8,10 +8,10 @@
 # 	https://github.com/sudar/Arduino-Makefile
 
 BOARD_TAG    = nano
-BOARD_SUB    = atmega328
+BOARD_SUB    = atmega168
 ARDUINO_LIBS = AccelStepper
 ARDUINO_LIBS += Wire
-ARDUINO_PORT = /dev/ttyUSB.focuser
+ARDUINO_PORT = /dev/ttyUSB0
 
 include /usr/share/arduino/Arduino.mk
 
