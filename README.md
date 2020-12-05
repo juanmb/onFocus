@@ -61,7 +61,7 @@ you have to use the `nano328new` environment:
 * NEMA 17 motor attached to the focuser using a custom 3D printed part.
 * Timing belts.
 
-![images/focuser1.jpg](images/focuser1.jpg =600x)
+![images/focuser1.jpg](images/focuser1.jpg)
 
 ### Example 2
 
@@ -69,6 +69,6 @@ you have to use the `nano328new` environment:
 * Laser-cut acrylic cover.
 * Motor attached to the focuser using a flexible shaft coupler.
 
-![images/focuser2.jpg](images/focuser2.jpg =400x)
+![images/focuser2.jpg](images/focuser2.jpg)
 
-![images/focuser3.jpg](images/focuser3.jpg =400x)
+![images/focuser3.jpg](images/focuser3.jpg)
