@@ -268,7 +268,7 @@ void loop()
                 turnOn();
                 stepper.setMaxSpeed(HOMING1_SPEED);
                 stepper.setCurrentPosition(20000);
-                stepper.moveTo(0);
+                stepper.moveTo(-20000);
                 state = ST_HOMING1;
             } else {
                 // turn power off if active time period has elapsed

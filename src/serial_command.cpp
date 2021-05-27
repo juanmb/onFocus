@@ -1,11 +1,3 @@
-/******************************************************************
-    Author:     Juan Menendez Blanco    <juanmb@gmail.com>
-
-    This code is part of the MoonliteFocuser project:
-        https://github.com/juanmb/MoonliteFocuser
-
-*******************************************************************************/
-
 #include <Arduino.h>
 #include "serial_command.h"
 
